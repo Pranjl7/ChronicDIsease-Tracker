@@ -2,6 +2,18 @@
   command = "npm run build"
   publish = "dist"
 
+[functions]
+  node_bundler = "esbuild"
+  # Installed from package.json instead of bundled (the MongoDB driver has optional native deps).
+  external_node_modules = ["mongoose", "mongodb"]
+
+# REST API → Express app in netlify/functions/api.ts. Must come before the SPA rule.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
 # Client-side routing (React Router): serve index.html for app routes.
 [[redirects]]
   from = "/*"

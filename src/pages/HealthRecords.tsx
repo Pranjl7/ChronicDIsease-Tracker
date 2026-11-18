@@ -170,7 +170,15 @@ export default function HealthRecords() {
             </p>
             <div className="mt-6 flex justify-end gap-2">
               <button className="btn btn-ghost" onClick={() => setConfirm(null)}>Cancel</button>
-              <button className="btn bg-rose-brand text-white hover:opacity-90" onClick={async () => { await deleteRecord(confirm.record_id); setConfirm(null); setToast({ message: 'Record deleted', alert: false }) }}>
+              <button className="btn bg-rose-brand text-white hover:opacity-90" onClick={async () => {
+                try {
+                  await deleteRecord(confirm.record_id)
+                  setToast({ message: 'Record deleted', alert: false })
+                } catch (e) {
+                  setToast({ message: e instanceof Error ? e.message : 'Could not delete the record', alert: true })
+                }
+                setConfirm(null)
+              }}>
                 <Trash2 className="size-4" /> Delete
               </button>
             </div>

@@ -67,18 +67,23 @@ export default function RecordForm({
       notes: notes.trim(),
       symptom_ids: picked,
     }
-    if (existing) {
-      await updateRecord(existing.record_id, { ...base, metric_id: metricId, recorded_value: v })
-      onDone({ message: 'Record updated', alert: false })
-      return
+    try {
+      if (existing) {
+        await updateRecord(existing.record_id, { ...base, metric_id: metricId, recorded_value: v })
+        onDone({ message: 'Record updated', alert: false })
+        return
+      }
+      const a = await createRecord({ ...base, metric_id: metricId, recorded_value: v })
+      const b = isBP ? await createRecord({ ...base, metric_id: 3, recorded_value: dia, symptom_ids: [] }) : null
+      const raised = a.alerts.length + (b?.alerts.length ?? 0)
+      onDone({
+        message: raised ? `Saved. ${raised} threshold alert${raised > 1 ? 's' : ''} raised, see Notifications.` : 'Reading saved',
+        alert: raised > 0,
+      })
+    } catch (e) {
+      setErrors({ form: e instanceof Error ? e.message : 'Could not save the reading.' })
+      setBusy(false)
     }
-    const a = await createRecord({ ...base, metric_id: metricId, recorded_value: v })
-    const b = isBP ? await createRecord({ ...base, metric_id: 3, recorded_value: dia, symptom_ids: [] }) : null
-    const raised = a.alerts.length + (b?.alerts.length ?? 0)
-    onDone({
-      message: raised ? `Saved. ${raised} threshold alert${raised > 1 ? 's' : ''} raised, see Notifications.` : 'Reading saved',
-      alert: raised > 0,
-    })
   }
 
   const toggle = (id: number) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
@@ -171,6 +176,8 @@ export default function RecordForm({
         <AlertTriangle className="mt-px size-3.5 shrink-0 text-amber-brand" />
         If the reading falls outside a threshold your care team configured, an informational alert is created automatically.
       </p>
+
+      {errors.form && <p role="alert" className="text-sm font-medium text-rose-brand">{errors.form}</p>}
 
       <button className="btn btn-primary w-full !py-3" disabled={busy}>
         {busy ? 'Saving…' : existing ? 'Save changes' : 'Save reading'}

@@ -1,14 +1,15 @@
 # AI-Based Chronic Disease Tracker: Product Roadmap
 
-The tracker is a relational, DBMS-driven health-tracking and analytics platform for patients with long-term conditions, their doctors and administrators. Alerts and reports are rule-based and informational. The product never diagnoses.
+The tracker is a database-driven health-tracking and analytics platform for patients with long-term conditions, their doctors and administrators. Alerts and reports are rule-based and informational. The product never diagnoses.
 
 ## Platform decisions
 
 - **Frontend:** React 19 + TypeScript + Tailwind CSS v4 + React Router + Recharts (Vite SPA). Live now.
-- **Backend:** Express.js REST API (TypeScript), deployed as a **Netlify Server** (`netlify/server/index.mjs` entry, with source in `server/`: `routes/`, `controllers/`, `services/`, `middleware/`, `validators/`, `config/`, `database/`). Every API call goes to `/api/*` on the same origin.
-- **Database:** **Netlify Database**, a managed Postgres instance provisioned with the site. The brief asked for MySQL 8.x and then, in a final note, MongoDB. The project uses the relational database the hosting platform manages. Postgres supports every DBMS concept in the brief (PK/FK, UNIQUE, NOT NULL, CHECK, DEFAULT, 3NF, joins, aggregates, GROUP BY/HAVING, subqueries, B-tree indexes, `BEGIN/COMMIT/ROLLBACK`, parameterised queries, `EXPLAIN ANALYZE`). A document store such as MongoDB would rule out most of them.
-  - Schema in `db/schema.ts` (Drizzle ORM via `@netlify/database`). Migrations are generated as plain `.sql` files, which double as the readable "SQL schema file" for evaluation.
-  - Analytical and report queries are written as explicit **parameterised SQL** (Drizzle `sql` template), so the joins, aggregates and subqueries are visible in code.
+- **Backend:** Express.js REST API (TypeScript) in `server/app.ts`, deployed as a Netlify Function (`netlify/functions/api.ts`) and mounted in the Vite dev server locally. Every API call goes to `/api/*` on the same origin.
+- **Database:** **MongoDB Atlas** via Mongoose (decision changed on 2026-11-18 at the project owner's request; it replaces the earlier Netlify Database/Postgres plan). The connection string lives only in `MONGODB_URI` (`.env` locally, Netlify environment variables in production).
+  - One schema per collection in `db/models/`. Documents keep the numeric ids the UI uses (`patient_id`, `record_id`, ...) with unique indexes; new ids come from an atomic `counters` collection.
+  - Relational rules are enforced in code: required fields, enums and range validators replace CHECK constraints, unique indexes replace UNIQUE, and the API checks that referenced ids exist. Deleting a reading nulls `record_id` on its alerts (the SET NULL rule). Multi-step writes use MongoDB transactions.
+  - Trade-off: MongoDB has no foreign keys or joins in the SQL sense. Joins are done with `$lookup` or in the API layer, and analytics will use the aggregation pipeline (`$match`, `$group`, `$dateTrunc`) instead of SQL `GROUP BY`.
 - **Auth:** bcrypt password hashing + JWT (short-lived access token, httpOnly refresh cookie), with role-based middleware (`patient`, `doctor`, `admin`) on every route.
 
 ## Milestones
@@ -23,8 +24,8 @@ Branded landing page, sign-in/registration, responsive app shell with a role-awa
 
 The remaining modules appear in the navigation as roadmap pages.
 
-### 2. Data model, seed data and server foundation
-- `db/schema.ts`: USERS, PATIENT (1:1 with USERS), DOCTOR (1:1 with USERS), DISEASE, PATIENT_DISEASES, HEALTH_METRICS, HEALTH_RECORD, SYMPTOM, RECORD_SYMPTOMS, MEDICATION, DISEASE_MEDICATIONS, PRESCRIPTION, SIDE_EFFECT, SYMPTOM_SIDE_EFFECTS, APPOINTMENT, AI_ANALYSIS_REPORT, ALERTS. Two supporting tables: **ALERT_RULES** for configurable thresholds and **DOCTOR_PATIENT_ACCESS** for authorisation. An **AUDIT_LOG** table records important changes.
+### 2. Data model, seed data and server foundation (MongoDB: done for patient data)
+- `db/models/` (MongoDB collections): USERS, PATIENT (1:1 with USERS), DOCTOR (1:1 with USERS), DISEASE, PATIENT_DISEASES, HEALTH_METRICS, HEALTH_RECORD, SYMPTOM, RECORD_SYMPTOMS, MEDICATION, DISEASE_MEDICATIONS, PRESCRIPTION, SIDE_EFFECT, SYMPTOM_SIDE_EFFECTS, APPOINTMENT, AI_ANALYSIS_REPORT, ALERTS. Two supporting tables: **ALERT_RULES** for configurable thresholds and **DOCTOR_PATIENT_ACCESS** for authorisation. An **AUDIT_LOG** table records important changes.
 - Constraints: CHECK (value ranges, `end_date >= start_date`, enum statuses), UNIQUE (email, junction pairs), DEFAULTs (`created_at`, `status`), FK rules (CASCADE from patient to their records, RESTRICT on master data in use, SET NULL on `alerts.record_id`).
 - Indexes: `(patient_id, recorded_at)`, `(patient_id, metric_id, recorded_at)`, `alerts(patient_id, status)`, `appointment(doctor_id, date)`.
 - Seed script that mirrors the current fixtures: 6 patients, 4 doctors, about 120 days of readings, prescriptions, appointments, side effects and alerts.
@@ -46,7 +47,7 @@ The remaining modules appear in the navigation as roadmap pages.
 - Nothing is recommended or prescribed automatically.
 
 ### 6. Analytics, reports and alerts on SQL
-- Analytics endpoints that use `AVG/MIN/MAX/COUNT … GROUP BY date_trunc('week'|'month')` with HAVING, plus previous-period comparison through subqueries.
+- Analytics endpoints that use the aggregation pipeline (`$group` with `$avg/$min/$max/$count` over `$dateTrunc` by week or month, `$match` after grouping in place of HAVING), plus previous-period comparison.
 - **Analysis reports:** generate a report for a chosen period (rule-based summary, trends, observations and "discuss with your doctor" points), then save it to AI_ANALYSIS_REPORT and view it later.
 - Optional AI-written summary through Netlify AI Gateway, clearly labelled and built only from stored values. It never fills in missing data.
 - Alert-rule editor for doctors and admins.

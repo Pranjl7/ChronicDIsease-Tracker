@@ -14,7 +14,7 @@ export default function AppLayout() {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
-  const { data: alerts } = useData(() => getAlerts(session!.patientId), [session?.patientId])
+  const { data: alerts, error: apiError } = useData(() => getAlerts(session!.patientId), [session?.patientId])
   const unread = alerts?.filter((a) => a.status === 'unread').length ?? 0
 
   const sidebar = (
@@ -111,6 +111,11 @@ export default function AppLayout() {
           </div>
         </header>
         <main key={location.pathname} className="mx-auto max-w-[1280px] px-4 py-8 md:px-8">
+          {apiError && (
+            <div role="alert" className="mb-6 rounded-xl border border-rose-brand/30 bg-rose-soft px-4 py-3 text-sm text-ink">
+              <strong className="font-semibold">Can't load data from the server.</strong> {apiError}
+            </div>
+          )}
           <Outlet />
         </main>
       </div>

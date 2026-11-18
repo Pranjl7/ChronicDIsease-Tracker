@@ -1,2 +1,11 @@
 # Local Netlify folder
 .netlify
+
+# Dependencies and build output
+node_modules
+dist
+
+# Secrets (MongoDB connection string lives here)
+.env
+.env.*
+!.env.example
